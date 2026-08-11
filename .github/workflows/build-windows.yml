@@ -22,16 +22,11 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build servidor (AcessoRemoto-Servidor.exe)
-        run: pyinstaller --onefile --name AcessoRemoto-Servidor server.py
+      - name: Build AcessoRemoto.exe
+        run: pyinstaller --onefile --noconsole --name AcessoRemoto app.py
 
-      - name: Build cliente (AcessoRemoto-Cliente.exe)
-        run: pyinstaller --onefile --noconsole --name AcessoRemoto-Cliente client.py
-
-      - name: Publicar artefatos
+      - name: Publicar artefato
         uses: actions/upload-artifact@v4
         with:
           name: acesso-remoto-windows
-          path: |
-            dist/AcessoRemoto-Servidor.exe
-            dist/AcessoRemoto-Cliente.exe
+          path: dist/AcessoRemoto.exe
