@@ -1,0 +1,37 @@
+name: Build executaveis Windows
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build servidor (AcessoRemoto-Servidor.exe)
+        run: pyinstaller --onefile --name AcessoRemoto-Servidor server.py
+
+      - name: Build cliente (AcessoRemoto-Cliente.exe)
+        run: pyinstaller --onefile --noconsole --name AcessoRemoto-Cliente client.py
+
+      - name: Publicar artefatos
+        uses: actions/upload-artifact@v4
+        with:
+          name: acesso-remoto-windows
+          path: |
+            dist/AcessoRemoto-Servidor.exe
+            dist/AcessoRemoto-Cliente.exe

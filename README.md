@@ -50,6 +50,47 @@ dentro da janela para controlar a outra máquina.
 - `--fps N`: quadros por segundo enviados (padrão 15).
 - `--video-port` / `--control-port`: portas TCP (padrão 5000 e 5001).
 
+## Versão instalável (Windows, .exe)
+
+Não é necessário ter Python instalado nas máquinas Windows para usar o
+programa. A cada push no branch `main`, o GitHub Actions gera
+automaticamente dois executáveis:
+
+- `AcessoRemoto-Servidor.exe`
+- `AcessoRemoto-Cliente.exe`
+
+Para baixar:
+
+1. No GitHub, abra a aba **Actions** do repositório.
+2. Clique na execução mais recente do workflow **Build executaveis Windows**.
+3. Na seção **Artifacts**, baixe `acesso-remoto-windows` (um `.zip` com
+   os dois `.exe`).
+
+Uso é o mesmo de antes, só que via linha de comando com o `.exe` em vez
+de `python arquivo.py`:
+
+```
+AcessoRemoto-Servidor.exe --password "escolha-uma-senha-forte"
+AcessoRemoto-Cliente.exe 192.168.0.42 --password "escolha-uma-senha-forte"
+```
+
+O Windows Defender/SmartScreen pode alertar por ser um executável não
+assinado digitalmente — isso é esperado para um projeto pessoal sem
+certificado de assinatura de código; escolha "Executar assim mesmo".
+
+### Gerar o .exe manualmente (opcional)
+
+Em uma máquina Windows com Python instalado:
+
+```
+pip install -r requirements.txt
+pip install pyinstaller
+pyinstaller --onefile --name AcessoRemoto-Servidor server.py
+pyinstaller --onefile --noconsole --name AcessoRemoto-Cliente client.py
+```
+
+Os `.exe` ficam em `dist/`.
+
 ## Avisos de segurança
 
 - **Feito para uso em rede local confiável.** O tráfego de vídeo e
