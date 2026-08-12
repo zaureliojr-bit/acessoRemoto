@@ -118,6 +118,3 @@ Opções úteis do `server.py`: `--monitor N` (monitor a capturar),
 - Sem transferência de arquivos (pode ser adicionada depois).
 - No Linux/Wayland, controle remoto de mouse/teclado não funciona
   (limitação do `pynput`); funciona normalmente em X11 e Windows.
-- A janela de visualização mostra a imagem no tamanho nativo da tela
-  remota; se as resoluções forem muito diferentes, pode não caber na
-  tela.
