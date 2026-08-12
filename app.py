@@ -200,11 +200,15 @@ class Host:
 # ---------- Lado cliente: janela que mostra e controla o computador remoto ----------
 
 class ViewerWindow(tk.Toplevel):
+    MAX_INITIAL_SIZE = (1024, 768)
+    MIN_SIZE = (320, 240)
+
     def __init__(self, master, host: str, password: str, video_port: int, control_port: int):
         super().__init__(master)
         self.title(f"Acesso Remoto - {host}")
-        self.label = tk.Label(self)
-        self.label.pack()
+        self.label = tk.Label(self, bg="black")
+        self.label.pack(fill="both", expand=True)
+        self.minsize(*self.MIN_SIZE)
 
         self.password_hash = hash_password(password)
         self.host = host
@@ -212,6 +216,13 @@ class ViewerWindow(tk.Toplevel):
         self.control_port = control_port
         self.video_sock = None
         self.control_sock = None
+
+        # Tamanho real da tela remota (definido ao chegar o primeiro frame)
+        # e tamanho com que a imagem foi exibida por ultimo, usados para
+        # converter as coordenadas do mouse na janela para coordenadas da
+        # tela remota quando a janela e redimensionada.
+        self.remote_size = None
+        self.display_size = None
 
         self.label.bind("<Motion>", self.on_motion)
         self.label.bind("<Button-1>", lambda e: self.on_click("left", True))
@@ -253,9 +264,29 @@ class ViewerWindow(tk.Toplevel):
             self.after(0, self._set_image, image)
 
     def _set_image(self, image) -> None:
+        if self.remote_size is None:
+            self.remote_size = image.size
+            self._set_initial_geometry(image.size)
+
+        remote_w, remote_h = self.remote_size
+        target_w = max(self.label.winfo_width(), 1)
+        target_h = max(self.label.winfo_height(), 1)
+        scale = min(target_w / remote_w, target_h / remote_h)
+        display_size = (max(int(remote_w * scale), 1), max(int(remote_h * scale), 1))
+        if display_size != image.size:
+            image = image.resize(display_size, Image.BILINEAR)
+        self.display_size = display_size
+
         photo = ImageTk.PhotoImage(image)
         self.label.configure(image=photo)
         self.label.image = photo
+
+    def _set_initial_geometry(self, remote_size) -> None:
+        remote_w, remote_h = remote_size
+        max_w, max_h = self.MAX_INITIAL_SIZE
+        scale = min(max_w / remote_w, max_h / remote_h, 1.0)
+        self.geometry(f"{int(remote_w * scale)}x{int(remote_h * scale)}")
+        self.update_idletasks()
 
     def send_event(self, event: dict) -> None:
         try:
@@ -263,8 +294,18 @@ class ViewerWindow(tk.Toplevel):
         except OSError:
             pass
 
+    def _to_remote_coords(self, x: int, y: int):
+        if not self.remote_size or not self.display_size:
+            return x, y
+        remote_w, remote_h = self.remote_size
+        display_w, display_h = self.display_size
+        remote_x = int(x * remote_w / display_w)
+        remote_y = int(y * remote_h / display_h)
+        return max(0, min(remote_x, remote_w - 1)), max(0, min(remote_y, remote_h - 1))
+
     def on_motion(self, event) -> None:
-        self.send_event({"type": "move", "x": event.x, "y": event.y})
+        x, y = self._to_remote_coords(event.x, event.y)
+        self.send_event({"type": "move", "x": x, "y": y})
 
     def on_click(self, button: str, pressed: bool) -> None:
         if pressed:
