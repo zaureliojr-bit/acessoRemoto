@@ -67,6 +67,7 @@ class RemoteClient:
         self.label.bind("<MouseWheel>", self.on_scroll)
         self.root.bind("<KeyPress>", lambda e: self.on_key(e, True))
         self.root.bind("<KeyRelease>", lambda e: self.on_key(e, False))
+        self.root.after(150, self.root.focus_force)
 
     def connect(self) -> None:
         self.video_sock = socket.create_connection((self.host, self.video_port))
@@ -104,6 +105,8 @@ class RemoteClient:
         self.send_event({"type": "move", "x": event.x, "y": event.y})
 
     def on_click(self, button: str, pressed: bool) -> None:
+        if pressed:
+            self.root.focus_force()
         self.send_event({"type": "click", "button": button, "pressed": pressed})
 
     def on_scroll(self, event) -> None:

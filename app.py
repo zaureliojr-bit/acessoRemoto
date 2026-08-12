@@ -223,6 +223,11 @@ class ViewerWindow(tk.Toplevel):
         self.bind("<KeyRelease>", lambda e: self.on_key(e, False))
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
+        # Uma janela Toplevel nao recebe foco de teclado automaticamente no
+        # Windows; sem isso, o video/mouse funcionam mas as teclas nunca
+        # chegam a esta janela.
+        self.after(150, self.focus_force)
+
     def connect(self) -> None:
         self.video_sock = socket.create_connection((self.host, self.video_port), timeout=5)
         send_line(self.video_sock, self.password_hash)
@@ -262,6 +267,8 @@ class ViewerWindow(tk.Toplevel):
         self.send_event({"type": "move", "x": event.x, "y": event.y})
 
     def on_click(self, button: str, pressed: bool) -> None:
+        if pressed:
+            self.focus_force()
         self.send_event({"type": "click", "button": button, "pressed": pressed})
 
     def on_scroll(self, event) -> None:
