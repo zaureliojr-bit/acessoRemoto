@@ -44,6 +44,7 @@ SPECIAL_KEYS = {
     "shift": Key.shift,
     "control": Key.ctrl,
     "alt": Key.alt,
+    "super": Key.cmd,
     "up": Key.up,
     "down": Key.down,
     "left": Key.left,
