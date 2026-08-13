@@ -115,6 +115,16 @@ Opções úteis do `server.py`: `--monitor N` (monitor a capturar),
   reuso — mesmo assim, evite deixar o app aberto e "ouvindo" sem
   necessidade.
 
+## Alt+Tab e tecla Windows
+
+Enquanto a janela de visualização remota estiver em primeiro plano (na
+máquina que está controlando), Alt+Tab e a tecla Windows são capturadas
+antes de chegar ao Windows local e reenviadas para a máquina remota —
+assim quem está sendo controlado é a máquina remota, não a sua. Esse
+recurso só existe no Windows (é uma limitação do próprio sistema
+operacional local interceptar essas teclas antes de qualquer aplicativo
+comum recebê-las).
+
 ## Limitações conhecidas / próximos passos
 
 - Sem criptografia da conexão (TLS) — recomendado como próxima melhoria.
