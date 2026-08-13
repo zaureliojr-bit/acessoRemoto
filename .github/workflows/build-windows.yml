@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -22,6 +25,13 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Definir versao do build
+        shell: bash
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          echo "APP_VERSION = \"$SHORT_SHA\"" > version.py
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
+
       - name: Build AcessoRemoto.exe
         run: pyinstaller --onefile --noconsole --name AcessoRemoto app.py
 
@@ -30,3 +40,14 @@ jobs:
         with:
           name: acesso-remoto-windows
           path: dist/AcessoRemoto.exe
+
+      - name: Publicar release com link estavel de download
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "$SHORT_SHA" --repo "${{ github.repository }}" --yes --cleanup-tag || true
+          gh release create "$SHORT_SHA" dist/AcessoRemoto.exe \
+            --repo "${{ github.repository }}" \
+            --title "AcessoRemoto ($SHORT_SHA)" \
+            --notes "Build automático a partir do commit $SHORT_SHA."

@@ -53,17 +53,21 @@ Na janela que abrir:
 
 Não é necessário ter Python instalado nas máquinas Windows para usar o
 programa. A cada push no branch `main`, o GitHub Actions gera
-automaticamente `AcessoRemoto.exe`.
+automaticamente `AcessoRemoto.exe` e publica numa Release do GitHub.
 
-Para baixar:
+**Link fixo de download** (sempre aponta para a versão mais recente):
 
-1. No GitHub, abra a aba **Actions** do repositório.
-2. Clique na execução mais recente do workflow **Build executaveis Windows**.
-3. Na seção **Artifacts**, baixe `acesso-remoto-windows` (um `.zip` com
-   o `AcessoRemoto.exe`).
+```
+https://github.com/zaureliojr-bit/acessoRemoto/releases/latest/download/AcessoRemoto.exe
+```
+
+Salve esse link nos favoritos — ele nunca muda, então não é preciso
+caçar o build mais recente na aba Actions a cada atualização.
 
 Basta dar duplo clique no `AcessoRemoto.exe` em cada máquina — a
-interface é a mesma descrita na seção "Uso" acima.
+interface é a mesma descrita na seção "Uso" acima. O próprio app tem um
+botão **"Verificar atualizações"** no rodapé, que avisa quando sai uma
+versão nova e oferece abrir a página de download.
 
 O Windows Defender/SmartScreen pode alertar por ser um executável não
 assinado digitalmente — isso é esperado para um projeto pessoal sem
