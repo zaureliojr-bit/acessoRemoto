@@ -237,12 +237,14 @@ class ViewerWindow(tk.Toplevel):
         self.video_sock = None
         self.control_sock = None
 
-        # Tamanho real da tela remota (definido ao chegar o primeiro frame)
-        # e tamanho com que a imagem foi exibida por ultimo, usados para
-        # converter as coordenadas do mouse na janela para coordenadas da
-        # tela remota quando a janela e redimensionada.
+        # Tamanho real da tela remota (definido ao chegar o primeiro frame),
+        # tamanho com que a imagem foi exibida por ultimo e deslocamento
+        # (a imagem fica centralizada quando a proporcao da janela nao bate
+        # com a da tela remota) - usados para converter as coordenadas do
+        # mouse na janela para coordenadas da tela remota.
         self.remote_size = None
         self.display_size = None
+        self.display_offset = (0, 0)
 
         self.label.bind("<Motion>", self.on_motion)
         self.label.bind("<Button-1>", lambda e: self.on_click("left", True))
@@ -296,6 +298,7 @@ class ViewerWindow(tk.Toplevel):
         if display_size != image.size:
             image = image.resize(display_size, Image.BILINEAR)
         self.display_size = display_size
+        self.display_offset = ((target_w - display_size[0]) // 2, (target_h - display_size[1]) // 2)
 
         photo = ImageTk.PhotoImage(image)
         self.label.configure(image=photo)
@@ -319,8 +322,11 @@ class ViewerWindow(tk.Toplevel):
             return x, y
         remote_w, remote_h = self.remote_size
         display_w, display_h = self.display_size
-        remote_x = int(x * remote_w / display_w)
-        remote_y = int(y * remote_h / display_h)
+        offset_x, offset_y = self.display_offset
+        image_x = max(0, min(x - offset_x, display_w - 1))
+        image_y = max(0, min(y - offset_y, display_h - 1))
+        remote_x = int(image_x * remote_w / display_w)
+        remote_y = int(image_y * remote_h / display_h)
         return max(0, min(remote_x, remote_w - 1)), max(0, min(remote_y, remote_h - 1))
 
     def on_motion(self, event) -> None:
