@@ -40,10 +40,14 @@ Na janela que abrir:
 
 - Em **"Permitir que me acessem"**, veja seu IP e a senha gerada — passe
   essas informações (por WhatsApp, por exemplo) para quem for te acessar.
-- Em **"Acessar outro computador"**, digite o IP e a senha mostrados na
-  tela da outra máquina e clique em **Conectar**. Uma nova janela abre
-  com a tela remota; mova o mouse, clique e digite dentro dela para
-  controlar a outra máquina.
+- Em **"Acessar outro computador"**, digite (ou escolha na lista de IPs
+  já usados) o IP e a senha mostrados na tela da outra máquina, e clique
+  em **Conectar**. Uma nova janela abre com a tela remota; mova o mouse,
+  clique e digite dentro dela para controlar a outra máquina.
+- Todo IP que você conseguir conectar fica salvo num histórico local (no
+  seu usuário do Windows, não é compartilhado com ninguém), disponível
+  no campo de IP na próxima vez. Use **"Limpar histórico"** para apagar
+  essa lista.
 
 ## Versão instalável (Windows, .exe)
 
@@ -118,6 +122,3 @@ Opções úteis do `server.py`: `--monitor N` (monitor a capturar),
 - Sem transferência de arquivos (pode ser adicionada depois).
 - No Linux/Wayland, controle remoto de mouse/teclado não funciona
   (limitação do `pynput`); funciona normalmente em X11 e Windows.
-- A janela de visualização mostra a imagem no tamanho nativo da tela
-  remota; se as resoluções forem muito diferentes, pode não caber na
-  tela.

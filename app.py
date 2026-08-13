@@ -14,7 +14,8 @@ import string
 import threading
 import time
 import tkinter as tk
-from tkinter import messagebox
+from pathlib import Path
+from tkinter import messagebox, ttk
 
 import mss
 from PIL import Image, ImageTk
@@ -88,6 +89,25 @@ def local_ip() -> str:
 
 def generate_password(length: int = 6) -> str:
     return "".join(secrets.choice(string.digits) for _ in range(length))
+
+
+HISTORY_PATH = Path.home() / ".acesso_remoto_historico.json"
+MAX_HISTORY = 10
+
+
+def load_history() -> list:
+    try:
+        data = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [str(host) for host in data] if isinstance(data, list) else []
+
+
+def save_history(history: list) -> None:
+    try:
+        HISTORY_PATH.write_text(json.dumps(history), encoding="utf-8")
+    except OSError:
+        pass
 
 
 # ---------- Lado servidor: permite que este computador seja acessado ----------
@@ -200,11 +220,15 @@ class Host:
 # ---------- Lado cliente: janela que mostra e controla o computador remoto ----------
 
 class ViewerWindow(tk.Toplevel):
+    MAX_INITIAL_SIZE = (1024, 768)
+    MIN_SIZE = (320, 240)
+
     def __init__(self, master, host: str, password: str, video_port: int, control_port: int):
         super().__init__(master)
         self.title(f"Acesso Remoto - {host}")
-        self.label = tk.Label(self)
-        self.label.pack()
+        self.label = tk.Label(self, bg="black")
+        self.label.pack(fill="both", expand=True)
+        self.minsize(*self.MIN_SIZE)
 
         self.password_hash = hash_password(password)
         self.host = host
@@ -212,6 +236,13 @@ class ViewerWindow(tk.Toplevel):
         self.control_port = control_port
         self.video_sock = None
         self.control_sock = None
+
+        # Tamanho real da tela remota (definido ao chegar o primeiro frame)
+        # e tamanho com que a imagem foi exibida por ultimo, usados para
+        # converter as coordenadas do mouse na janela para coordenadas da
+        # tela remota quando a janela e redimensionada.
+        self.remote_size = None
+        self.display_size = None
 
         self.label.bind("<Motion>", self.on_motion)
         self.label.bind("<Button-1>", lambda e: self.on_click("left", True))
@@ -253,9 +284,29 @@ class ViewerWindow(tk.Toplevel):
             self.after(0, self._set_image, image)
 
     def _set_image(self, image) -> None:
+        if self.remote_size is None:
+            self.remote_size = image.size
+            self._set_initial_geometry(image.size)
+
+        remote_w, remote_h = self.remote_size
+        target_w = max(self.label.winfo_width(), 1)
+        target_h = max(self.label.winfo_height(), 1)
+        scale = min(target_w / remote_w, target_h / remote_h)
+        display_size = (max(int(remote_w * scale), 1), max(int(remote_h * scale), 1))
+        if display_size != image.size:
+            image = image.resize(display_size, Image.BILINEAR)
+        self.display_size = display_size
+
         photo = ImageTk.PhotoImage(image)
         self.label.configure(image=photo)
         self.label.image = photo
+
+    def _set_initial_geometry(self, remote_size) -> None:
+        remote_w, remote_h = remote_size
+        max_w, max_h = self.MAX_INITIAL_SIZE
+        scale = min(max_w / remote_w, max_h / remote_h, 1.0)
+        self.geometry(f"{int(remote_w * scale)}x{int(remote_h * scale)}")
+        self.update_idletasks()
 
     def send_event(self, event: dict) -> None:
         try:
@@ -263,8 +314,18 @@ class ViewerWindow(tk.Toplevel):
         except OSError:
             pass
 
+    def _to_remote_coords(self, x: int, y: int):
+        if not self.remote_size or not self.display_size:
+            return x, y
+        remote_w, remote_h = self.remote_size
+        display_w, display_h = self.display_size
+        remote_x = int(x * remote_w / display_w)
+        remote_y = int(y * remote_h / display_h)
+        return max(0, min(remote_x, remote_w - 1)), max(0, min(remote_y, remote_h - 1))
+
     def on_motion(self, event) -> None:
-        self.send_event({"type": "move", "x": event.x, "y": event.y})
+        x, y = self._to_remote_coords(event.x, event.y)
+        self.send_event({"type": "move", "x": x, "y": y})
 
     def on_click(self, button: str, pressed: bool) -> None:
         if pressed:
@@ -351,20 +412,41 @@ class App:
         self.password_var.set(self.password)
 
     def _build_client_section(self) -> None:
+        self.history = load_history()
+
         frame = tk.LabelFrame(self.root, text="Acessar outro computador", padx=10, pady=10)
         frame.pack(fill="x", padx=10, pady=10)
 
         tk.Label(frame, text="IP do computador remoto:").grid(row=0, column=0, sticky="w")
         self.remote_ip_var = tk.StringVar()
-        tk.Entry(frame, textvariable=self.remote_ip_var, width=20).grid(row=0, column=1, sticky="w")
+        self.ip_combo = ttk.Combobox(
+            frame, textvariable=self.remote_ip_var, values=self.history, width=18
+        )
+        self.ip_combo.grid(row=0, column=1, sticky="w")
 
         tk.Label(frame, text="Senha:").grid(row=1, column=0, sticky="w")
         self.remote_password_var = tk.StringVar()
         tk.Entry(frame, textvariable=self.remote_password_var, width=20).grid(row=1, column=1, sticky="w")
 
         tk.Button(frame, text="Conectar", command=self.connect_to_remote).grid(
-            row=2, column=0, columnspan=2, pady=(8, 0)
+            row=2, column=0, sticky="w", pady=(8, 0)
         )
+        tk.Button(frame, text="Limpar histórico", command=self.clear_history).grid(
+            row=2, column=1, sticky="e", pady=(8, 0)
+        )
+
+    def clear_history(self) -> None:
+        self.history = []
+        save_history(self.history)
+        self.ip_combo["values"] = self.history
+
+    def remember_host(self, host: str) -> None:
+        if host in self.history:
+            self.history.remove(host)
+        self.history.insert(0, host)
+        self.history = self.history[:MAX_HISTORY]
+        save_history(self.history)
+        self.ip_combo["values"] = self.history
 
     def connect_to_remote(self) -> None:
         host = self.remote_ip_var.get().strip()
@@ -379,6 +461,9 @@ class App:
         except (OSError, RuntimeError) as exc:
             viewer.destroy()
             messagebox.showerror("Acesso Remoto", f"Nao foi possivel conectar: {exc}")
+            return
+
+        self.remember_host(host)
 
     def run(self) -> None:
         self.root.mainloop()
