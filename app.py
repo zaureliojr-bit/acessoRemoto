@@ -14,7 +14,8 @@ import string
 import threading
 import time
 import tkinter as tk
-from tkinter import messagebox
+from pathlib import Path
+from tkinter import messagebox, ttk
 
 import mss
 from PIL import Image, ImageTk
@@ -88,6 +89,25 @@ def local_ip() -> str:
 
 def generate_password(length: int = 6) -> str:
     return "".join(secrets.choice(string.digits) for _ in range(length))
+
+
+HISTORY_PATH = Path.home() / ".acesso_remoto_historico.json"
+MAX_HISTORY = 10
+
+
+def load_history() -> list:
+    try:
+        data = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [str(host) for host in data] if isinstance(data, list) else []
+
+
+def save_history(history: list) -> None:
+    try:
+        HISTORY_PATH.write_text(json.dumps(history), encoding="utf-8")
+    except OSError:
+        pass
 
 
 # ---------- Lado servidor: permite que este computador seja acessado ----------
@@ -392,20 +412,41 @@ class App:
         self.password_var.set(self.password)
 
     def _build_client_section(self) -> None:
+        self.history = load_history()
+
         frame = tk.LabelFrame(self.root, text="Acessar outro computador", padx=10, pady=10)
         frame.pack(fill="x", padx=10, pady=10)
 
         tk.Label(frame, text="IP do computador remoto:").grid(row=0, column=0, sticky="w")
         self.remote_ip_var = tk.StringVar()
-        tk.Entry(frame, textvariable=self.remote_ip_var, width=20).grid(row=0, column=1, sticky="w")
+        self.ip_combo = ttk.Combobox(
+            frame, textvariable=self.remote_ip_var, values=self.history, width=18
+        )
+        self.ip_combo.grid(row=0, column=1, sticky="w")
 
         tk.Label(frame, text="Senha:").grid(row=1, column=0, sticky="w")
         self.remote_password_var = tk.StringVar()
         tk.Entry(frame, textvariable=self.remote_password_var, width=20).grid(row=1, column=1, sticky="w")
 
         tk.Button(frame, text="Conectar", command=self.connect_to_remote).grid(
-            row=2, column=0, columnspan=2, pady=(8, 0)
+            row=2, column=0, sticky="w", pady=(8, 0)
         )
+        tk.Button(frame, text="Limpar histórico", command=self.clear_history).grid(
+            row=2, column=1, sticky="e", pady=(8, 0)
+        )
+
+    def clear_history(self) -> None:
+        self.history = []
+        save_history(self.history)
+        self.ip_combo["values"] = self.history
+
+    def remember_host(self, host: str) -> None:
+        if host in self.history:
+            self.history.remove(host)
+        self.history.insert(0, host)
+        self.history = self.history[:MAX_HISTORY]
+        save_history(self.history)
+        self.ip_combo["values"] = self.history
 
     def connect_to_remote(self) -> None:
         host = self.remote_ip_var.get().strip()
@@ -420,6 +461,9 @@ class App:
         except (OSError, RuntimeError) as exc:
             viewer.destroy()
             messagebox.showerror("Acesso Remoto", f"Nao foi possivel conectar: {exc}")
+            return
+
+        self.remember_host(host)
 
     def run(self) -> None:
         self.root.mainloop()
