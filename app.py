@@ -15,6 +15,9 @@ import sys
 import threading
 import time
 import tkinter as tk
+import urllib.error
+import urllib.request
+import webbrowser
 from pathlib import Path
 from tkinter import messagebox, ttk
 
@@ -32,6 +35,28 @@ from common import (
     send_frame,
     send_line,
 )
+
+try:
+    from version import APP_VERSION
+except ImportError:
+    APP_VERSION = "dev"
+
+GITHUB_REPO = "zaureliojr-bit/acessoRemoto"
+LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+RELEASES_PAGE_URL = f"https://github.com/{GITHUB_REPO}/releases/latest"
+
+
+def fetch_latest_version():
+    """Retorna (tag_da_ultima_versao, erro). Um dos dois e sempre None."""
+    try:
+        request = urllib.request.Request(
+            LATEST_RELEASE_API, headers={"Accept": "application/vnd.github+json"}
+        )
+        with urllib.request.urlopen(request, timeout=8) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        return data.get("tag_name"), None
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return None, str(exc)
 
 mouse = MouseController()
 keyboard = KeyboardController()
@@ -489,8 +514,21 @@ class App:
         self.root.resizable(False, False)
         self.password = generate_password()
 
-        self._build_host_section()
-        self._build_client_section()
+        style = ttk.Style(self.root)
+        if "vista" in style.theme_names():
+            style.theme_use("vista")
+        style.configure("Title.TLabel", font=("TkDefaultFont", 14, "bold"))
+        style.configure("Subtitle.TLabel", foreground="gray")
+        style.configure("Value.TLabel", font=("TkDefaultFont", 11, "bold"))
+        style.configure("Footer.TLabel", foreground="gray")
+
+        container = ttk.Frame(self.root, padding=12)
+        container.pack(fill="both", expand=True)
+
+        self._build_header(container)
+        self._build_host_section(container)
+        self._build_client_section(container)
+        self._build_footer(container)
 
         self.host_server = Host(get_password_hash=lambda: hash_password(self.password))
         try:
@@ -501,53 +539,79 @@ class App:
                 f"Nao foi possivel abrir as portas {DEFAULT_VIDEO_PORT}/{DEFAULT_CONTROL_PORT}: {exc}",
             )
 
-    def _build_host_section(self) -> None:
-        frame = tk.LabelFrame(self.root, text="Permitir que me acessem", padx=10, pady=10)
-        frame.pack(fill="x", padx=10, pady=10)
+    def _build_header(self, parent) -> None:
+        header = ttk.Frame(parent)
+        header.pack(fill="x", pady=(0, 8))
+        ttk.Label(header, text="Acesso Remoto", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(
+            header, text="Para uso na sua rede doméstica", style="Subtitle.TLabel"
+        ).pack(anchor="w")
 
-        tk.Label(frame, text="Seu IP na rede local:").grid(row=0, column=0, sticky="w")
-        tk.Label(frame, text=local_ip(), font=("TkDefaultFont", 11, "bold")).grid(row=0, column=1, sticky="w")
+    def _build_host_section(self, parent) -> None:
+        frame = ttk.LabelFrame(parent, text="Permitir que me acessem", padding=10)
+        frame.pack(fill="x", pady=(0, 10))
+        frame.columnconfigure(1, weight=1)
 
-        tk.Label(frame, text="Senha de acesso:").grid(row=1, column=0, sticky="w")
+        ttk.Label(frame, text="Seu IP na rede local:").grid(row=0, column=0, sticky="w")
+        ttk.Label(frame, text=local_ip(), style="Value.TLabel").grid(
+            row=0, column=1, sticky="w", padx=(6, 6)
+        )
+        ttk.Button(
+            frame, text="Copiar", width=8, command=lambda: self.copy_to_clipboard(local_ip())
+        ).grid(row=0, column=2, sticky="e")
+
+        ttk.Label(frame, text="Senha de acesso:").grid(row=1, column=0, sticky="w", pady=(6, 0))
         self.password_var = tk.StringVar(value=self.password)
-        tk.Entry(frame, textvariable=self.password_var, width=16).grid(row=1, column=1, sticky="w")
+        ttk.Entry(frame, textvariable=self.password_var, width=16).grid(
+            row=1, column=1, sticky="w", padx=(6, 6), pady=(6, 0)
+        )
+        ttk.Button(
+            frame, text="Copiar", width=8, command=lambda: self.copy_to_clipboard(self.password)
+        ).grid(row=1, column=2, sticky="e", pady=(6, 0))
 
-        tk.Button(frame, text="Gerar nova senha", command=self.regenerate_password).grid(
-            row=2, column=0, columnspan=2, pady=(8, 0)
+        ttk.Button(frame, text="Gerar nova senha", command=self.regenerate_password).grid(
+            row=2, column=0, columnspan=3, pady=(10, 0), sticky="w"
         )
 
-        tk.Label(
+        ttk.Label(
             frame,
             text="Compartilhe o IP e a senha acima com quem vai te acessar.",
-            wraplength=360, justify="left", fg="gray",
-        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+            wraplength=360, justify="left", style="Subtitle.TLabel",
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(10, 0))
+
+    def copy_to_clipboard(self, value: str) -> None:
+        self.root.clipboard_clear()
+        self.root.clipboard_append(value)
 
     def regenerate_password(self) -> None:
         self.password = generate_password()
         self.password_var.set(self.password)
 
-    def _build_client_section(self) -> None:
+    def _build_client_section(self, parent) -> None:
         self.history = load_history()
 
-        frame = tk.LabelFrame(self.root, text="Acessar outro computador", padx=10, pady=10)
-        frame.pack(fill="x", padx=10, pady=10)
+        frame = ttk.LabelFrame(parent, text="Acessar outro computador", padding=10)
+        frame.pack(fill="x", pady=(0, 10))
+        frame.columnconfigure(1, weight=1)
 
-        tk.Label(frame, text="IP do computador remoto:").grid(row=0, column=0, sticky="w")
+        ttk.Label(frame, text="IP do computador remoto:").grid(row=0, column=0, sticky="w")
         self.remote_ip_var = tk.StringVar()
         self.ip_combo = ttk.Combobox(
             frame, textvariable=self.remote_ip_var, values=self.history, width=18
         )
-        self.ip_combo.grid(row=0, column=1, sticky="w")
+        self.ip_combo.grid(row=0, column=1, columnspan=2, sticky="w", padx=(6, 0))
 
-        tk.Label(frame, text="Senha:").grid(row=1, column=0, sticky="w")
+        ttk.Label(frame, text="Senha:").grid(row=1, column=0, sticky="w", pady=(6, 0))
         self.remote_password_var = tk.StringVar()
-        tk.Entry(frame, textvariable=self.remote_password_var, width=20).grid(row=1, column=1, sticky="w")
-
-        tk.Button(frame, text="Conectar", command=self.connect_to_remote).grid(
-            row=2, column=0, sticky="w", pady=(8, 0)
+        ttk.Entry(frame, textvariable=self.remote_password_var, width=20).grid(
+            row=1, column=1, columnspan=2, sticky="w", padx=(6, 0), pady=(6, 0)
         )
-        tk.Button(frame, text="Limpar histórico", command=self.clear_history).grid(
-            row=2, column=1, sticky="e", pady=(8, 0)
+
+        ttk.Button(frame, text="Conectar", command=self.connect_to_remote).grid(
+            row=2, column=0, sticky="w", pady=(10, 0)
+        )
+        ttk.Button(frame, text="Limpar histórico", command=self.clear_history).grid(
+            row=2, column=1, columnspan=2, sticky="e", pady=(10, 0)
         )
 
     def clear_history(self) -> None:
@@ -579,6 +643,41 @@ class App:
             return
 
         self.remember_host(host)
+
+    def _build_footer(self, parent) -> None:
+        footer = ttk.Frame(parent)
+        footer.pack(fill="x", pady=(4, 0))
+
+        ttk.Label(footer, text=f"Versão: {APP_VERSION}", style="Footer.TLabel").pack(side="left")
+        ttk.Button(
+            footer, text="Verificar atualizações", command=self.check_updates
+        ).pack(side="right")
+
+    def check_updates(self) -> None:
+        threading.Thread(target=self._check_updates_worker, daemon=True).start()
+
+    def _check_updates_worker(self) -> None:
+        latest_tag, error = fetch_latest_version()
+        self.root.after(0, self._show_update_result, latest_tag, error)
+
+    def _show_update_result(self, latest_tag, error) -> None:
+        if error:
+            messagebox.showerror(
+                "Verificar atualizações",
+                f"Não foi possível verificar agora. Confira sua conexão com a internet.\n\n{error}",
+            )
+            return
+        if not latest_tag or latest_tag == APP_VERSION:
+            messagebox.showinfo(
+                "Verificar atualizações", f"Você já está com a versão mais recente ({APP_VERSION})."
+            )
+            return
+        if messagebox.askyesno(
+            "Atualização disponível",
+            f"Há uma versão mais nova disponível: {latest_tag}\nVocê está usando: {APP_VERSION}\n\n"
+            "Abrir a página de download?",
+        ):
+            webbrowser.open(RELEASES_PAGE_URL)
 
     def run(self) -> None:
         self.root.mainloop()
