@@ -87,7 +87,6 @@ if IS_WINDOWS:
     _user32.UnhookWindowsHookEx.argtypes = [wintypes.HANDLE]
     _user32.GetAsyncKeyState.restype = ctypes.c_short
     _user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
-    _user32.GetForegroundWindow.restype = wintypes.HWND
 
 
 class AltTabRedirector:
@@ -95,17 +94,22 @@ class AltTabRedirector:
     na maquina local enquanto a janela de visualizacao remota estiver em
     primeiro plano, encaminhando essas teclas para a maquina remota em vez
     disso.
+
+    Usa os eventos de foco do proprio Tkinter (<FocusIn>/<FocusOut>) para
+    saber se a janela de visualizacao esta ativa, em vez de comparar o
+    identificador de janela do Tk com GetForegroundWindow do Windows -
+    essa comparacao direta se mostrou pouco confiavel na pratica.
     """
 
-    _active_by_hwnd = {}
+    _active_send_event = None
     _hook_handle = None
     _hook_proc = None
 
     @classmethod
-    def register(cls, hwnd: int, send_key_event) -> None:
+    def activate(cls, send_key_event) -> None:
         if not IS_WINDOWS:
             return
-        cls._active_by_hwnd[hwnd] = send_key_event
+        cls._active_send_event = send_key_event
         if cls._hook_handle is None:
             try:
                 cls._hook_proc = _LowLevelKeyboardProc(cls._callback)
@@ -116,31 +120,24 @@ class AltTabRedirector:
                 cls._hook_handle = None
 
     @classmethod
-    def unregister(cls, hwnd: int) -> None:
+    def deactivate(cls, send_key_event) -> None:
         if not IS_WINDOWS:
             return
-        cls._active_by_hwnd.pop(hwnd, None)
-        if not cls._active_by_hwnd and cls._hook_handle is not None:
-            _user32.UnhookWindowsHookEx(cls._hook_handle)
-            cls._hook_handle = None
-            cls._hook_proc = None
+        if cls._active_send_event is send_key_event:
+            cls._active_send_event = None
 
     @classmethod
     def _callback(cls, code, wparam, lparam):
-        if code == 0 and cls._active_by_hwnd:
+        if code == 0 and cls._active_send_event is not None:
             try:
                 vk = lparam.contents.vkCode
-                foreground = _user32.GetForegroundWindow()
-                send_key_event = cls._active_by_hwnd.get(foreground)
-                if send_key_event is not None:
-                    down = wparam in (_WM_KEYDOWN, _WM_SYSKEYDOWN)
-                    alt_down = bool(_user32.GetAsyncKeyState(_VK_MENU) & 0x8000)
-                    if vk == _VK_TAB and alt_down:
-                        send_key_event({"type": "key", "key": "tab", "pressed": down})
-                        return 1
-                    if vk in (_VK_LWIN, _VK_RWIN):
-                        send_key_event({"type": "key", "key": "super", "pressed": down})
-                        return 1
+                down = wparam in (_WM_KEYDOWN, _WM_SYSKEYDOWN)
+                if vk == _VK_TAB and (_user32.GetAsyncKeyState(_VK_MENU) & 0x8000):
+                    cls._active_send_event({"type": "key", "key": "tab", "pressed": down})
+                    return 1
+                if vk in (_VK_LWIN, _VK_RWIN):
+                    cls._active_send_event({"type": "key", "key": "super", "pressed": down})
+                    return 1
             except Exception:
                 pass
         return _user32.CallNextHookEx(cls._hook_handle, code, wparam, lparam)
@@ -181,6 +178,8 @@ class RemoteClient:
         self.label.bind("<MouseWheel>", self.on_scroll)
         self.root.bind("<KeyPress>", lambda e: self.on_key(e, True))
         self.root.bind("<KeyRelease>", lambda e: self.on_key(e, False))
+        self.root.bind("<FocusIn>", lambda e: AltTabRedirector.activate(self.send_event))
+        self.root.bind("<FocusOut>", lambda e: AltTabRedirector.deactivate(self.send_event))
         self.root.after(150, self.root.focus_force)
 
     def connect(self) -> None:
@@ -197,12 +196,11 @@ class RemoteClient:
     def start(self) -> None:
         self.connect()
         threading.Thread(target=self.video_loop, daemon=True).start()
-        AltTabRedirector.register(self.root.winfo_id(), self.send_event)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.mainloop()
 
     def on_close(self) -> None:
-        AltTabRedirector.unregister(self.root.winfo_id())
+        AltTabRedirector.deactivate(self.send_event)
         self.root.destroy()
 
     def video_loop(self) -> None:
