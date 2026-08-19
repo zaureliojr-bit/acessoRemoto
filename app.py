@@ -10,6 +10,7 @@ import io
 import json
 import secrets
 import socket
+import ssl
 import string
 import sys
 import threading
@@ -21,6 +22,7 @@ import webbrowser
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+import certifi
 import mss
 from PIL import Image, ImageTk
 from pynput.keyboard import Controller as KeyboardController, Key
@@ -45,6 +47,12 @@ GITHUB_REPO = "zaureliojr-bit/acessoRemoto"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 RELEASES_PAGE_URL = f"https://github.com/{GITHUB_REPO}/releases/latest"
 
+# Em um .exe empacotado pelo PyInstaller, o Python embutido as vezes nao
+# encontra a lista de certificados confiaveis do sistema para validar
+# HTTPS ("unable to get local issuer certificate"). Usar explicitamente
+# a lista de certificados do pacote certifi evita isso.
+_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+
 
 def fetch_latest_version():
     """Retorna (tag_da_ultima_versao, erro). Um dos dois e sempre None."""
@@ -52,7 +60,7 @@ def fetch_latest_version():
         request = urllib.request.Request(
             LATEST_RELEASE_API, headers={"Accept": "application/vnd.github+json"}
         )
-        with urllib.request.urlopen(request, timeout=8) as response:
+        with urllib.request.urlopen(request, timeout=8, context=_SSL_CONTEXT) as response:
             data = json.loads(response.read().decode("utf-8"))
         return data.get("tag_name"), None
     except (urllib.error.URLError, OSError, ValueError) as exc:
