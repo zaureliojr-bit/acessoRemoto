@@ -1,12 +1,10 @@
-# Acesso Remoto (rede doméstica)
+# DrogaLink Remote — experimental
 
 Programa de acesso remoto, no estilo AnyDesk, para uso dentro de uma rede
 doméstica (LAN). É um **único aplicativo** (`app.py`) que faz os dois
 papéis ao mesmo tempo:
 
-- Ao abrir, já fica pronto para **ser acessado**: mostra seu IP na rede
-  local e uma senha gerada automaticamente (renovável a qualquer momento
-  com um clique).
+- Ao abrir, mostra seu IP e uma senha temporária, mas o recebimento de conexões fica desativado. A ativação depende de ação local explícita. Feche o aplicativo ao terminar.
 - Também tem um campo para você **acessar outro computador**: basta
   informar o IP e a senha exibidos na tela da outra máquina (que também
   precisa estar com o app aberto).
@@ -14,6 +12,10 @@ papéis ao mesmo tempo:
 Por baixo dos panos, a comunicação usa duas conexões TCP simples: uma
 para o vídeo (frames JPEG da tela) e outra para os comandos de controle
 (mouse/teclado, em JSON). O acesso é protegido por senha.
+
+## Estado do projeto
+
+A identidade DrogaLink Remote é uma evolução experimental. A implantação em farmácias está condicionada a uma revisão de segurança, proteção do tráfego, autorização explícita de cada sessão e testes de estabilidade. Não exponha dados de clientes nem utilize esta versão para suporte em produção.
 
 ## Instalação (a partir do código-fonte)
 
@@ -38,9 +40,9 @@ python app.py
 
 Na janela que abrir:
 
-- Em **"Permitir que me acessem"**, veja seu IP e a senha gerada — passe
+- Em **"Receber suporte autorizado"**, veja seu IP e a senha gerada — passe
   essas informações (por WhatsApp, por exemplo) para quem for te acessar.
-- Em **"Acessar outro computador"**, digite (ou escolha na lista de IPs
+- Em **"Solicitar conexão a outro computador"**, digite (ou escolha na lista de IPs
   já usados) o IP e a senha mostrados na tela da outra máquina, e clique
   em **Conectar**. Uma nova janela abre com a tela remota; mova o mouse,
   clique e digite dentro dela para controlar a outra máquina.
@@ -71,7 +73,7 @@ versão nova e oferece abrir a página de download.
 
 O Windows Defender/SmartScreen pode alertar por ser um executável não
 assinado digitalmente — isso é esperado para um projeto pessoal sem
-certificado de assinatura de código; escolha "Executar assim mesmo". O
+certificado de assinatura de código; Não ignore o alerta; aguarde uma distribuição assinada e validada. O
 Firewall do Windows também pode pedir permissão de rede na primeira
 execução — permita o acesso para redes privadas/domésticas.
 
@@ -110,10 +112,7 @@ Opções úteis do `server.py`: `--monitor N` (monitor a capturar),
   internet (não faça port-forward no roteador).
 - A senha é comparada por hash SHA-256 na autenticação, mas a conexão em
   si não usa TLS — qualquer pessoa na mesma rede local poderia, em
-  teoria, capturar o tráfego. Para uso doméstico numa rede Wi-Fi/cabo
-  confiável isso é geralmente aceitável, mas não é adequado para redes
-  públicas ou uso pela internet sem antes adicionar criptografia (ex.:
-  túnel TLS/SSH ou VPN).
+  teoria, capturar o tráfego. Use apenas em ambiente de testes isolado, sem dados de clientes. Não utilize em produção, redes públicas ou pela internet.
 - A senha gerada automaticamente muda a cada abertura do programa (ou ao
   clicar em "Gerar nova senha"), o que já reduz bastante o risco de
   reuso — mesmo assim, evite deixar o app aberto e "ouvindo" sem
