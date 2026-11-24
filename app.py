@@ -1,7 +1,7 @@
-"""Acesso Remoto - aplicativo unico (servidor + cliente) para uso em rede domestica.
+"""DrogaLink Remote - aplicativo unico (servidor + cliente) para uso em rede domestica.
 
-Ao abrir, a janela ja fica pronta para ser acessada (mostra o IP local e
-uma senha gerada automaticamente) e tambem permite conectar em outro
+Ao abrir, a janela mostra o IP local e
+uma senha gerada automaticamente e tambem permite conectar em outro
 computador que esteja rodando este mesmo programa, informando o IP e a
 senha exibidos na tela dele.
 """
@@ -362,7 +362,7 @@ class ViewerWindow(tk.Toplevel):
 
     def __init__(self, master, host: str, password: str, video_port: int, control_port: int):
         super().__init__(master)
-        self.title(f"Acesso Remoto - {host}")
+        self.title(f"DrogaLink Remote - {host}")
         self.label = tk.Label(self, bg="black")
         self.label.pack(fill="both", expand=True)
         self.minsize(*self.MIN_SIZE)
@@ -516,19 +516,19 @@ class ViewerWindow(tk.Toplevel):
 class App:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Acesso Remoto")
+        self.root.title("DrogaLink Remote")
         self.root.resizable(False, False)
         self.password = generate_password()
 
         style = ttk.Style(self.root)
         if "vista" in style.theme_names():
             style.theme_use("vista")
-        style.configure("Title.TLabel", font=("TkDefaultFont", 14, "bold"))
-        style.configure("Subtitle.TLabel", foreground="gray")
+        style.configure("Title.TLabel", font=("TkDefaultFont", 20, "bold"), foreground="#164E63")
+        style.configure("Subtitle.TLabel", foreground="#475569")
         style.configure("Value.TLabel", font=("TkDefaultFont", 11, "bold"))
         style.configure("Footer.TLabel", foreground="gray")
 
-        container = ttk.Frame(self.root, padding=12)
+        container = ttk.Frame(self.root, padding=20)
         container.pack(fill="both", expand=True)
 
         self._build_header(container)
@@ -537,26 +537,45 @@ class App:
         self._build_footer(container)
 
         self.host_server = Host(get_password_hash=lambda: hash_password(self.password))
+
+    def enable_local_support(self) -> None:
+        if not messagebox.askyesno(
+            "DrogaLink Remote",
+            "Ativar recebimento de conexões nesta rede local?\n\n"
+            "O tráfego não é criptografado. Use somente em ambiente de testes "
+            "isolado e com autorização. Feche o aplicativo para encerrar o recebimento.",
+        ):
+            return
+        # Avoid repeat activation, including after a partially failed startup.
+        self.enable_support_button.configure(state="disabled")
         try:
             self.host_server.start()
-        except OSError as exc:
-            messagebox.showerror(
-                "Acesso Remoto",
-                f"Nao foi possivel abrir as portas {DEFAULT_VIDEO_PORT}/{DEFAULT_CONTROL_PORT}: {exc}",
-            )
+        except OSError:
+            self.support_status.set("Falha na ativação. Feche o aplicativo.")
+            messagebox.showerror("DrogaLink Remote", "Falha ao ativar. Feche o aplicativo.")
+            return
+        self.support_status.set("Recebimento habilitado. Feche o aplicativo para encerrar.")
 
     def _build_header(self, parent) -> None:
         header = ttk.Frame(parent)
-        header.pack(fill="x", pady=(0, 8))
-        ttk.Label(header, text="Acesso Remoto", style="Title.TLabel").pack(anchor="w")
+        header.pack(fill="x", pady=(0, 16))
+        ttk.Label(header, text="DrogaLink Remote", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
-            header, text="Para uso na sua rede doméstica", style="Subtitle.TLabel"
+            header, text="Suporte autorizado • Rede local • Versão experimental", style="Subtitle.TLabel"
         ).pack(anchor="w")
 
     def _build_host_section(self, parent) -> None:
-        frame = ttk.LabelFrame(parent, text="Permitir que me acessem", padding=10)
+        frame = ttk.LabelFrame(parent, text="Receber suporte autorizado", padding=10)
         frame.pack(fill="x", pady=(0, 10))
         frame.columnconfigure(1, weight=1)
+
+        self.support_status = tk.StringVar(value="Recebimento desativado")
+        ttk.Label(frame, textvariable=self.support_status, style="Subtitle.TLabel",
+                  wraplength=360).grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
+        self.enable_support_button = ttk.Button(
+            frame, text="Ativar recebimento", command=self.enable_local_support
+        )
+        self.enable_support_button.grid(row=5, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
         ttk.Label(frame, text="Seu IP na rede local:").grid(row=0, column=0, sticky="w")
         ttk.Label(frame, text=local_ip(), style="Value.TLabel").grid(
@@ -568,7 +587,7 @@ class App:
 
         ttk.Label(frame, text="Senha de acesso:").grid(row=1, column=0, sticky="w", pady=(6, 0))
         self.password_var = tk.StringVar(value=self.password)
-        ttk.Entry(frame, textvariable=self.password_var, width=16).grid(
+        ttk.Entry(frame, textvariable=self.password_var, width=16, state="readonly").grid(
             row=1, column=1, sticky="w", padx=(6, 6), pady=(6, 0)
         )
         ttk.Button(
@@ -581,7 +600,7 @@ class App:
 
         ttk.Label(
             frame,
-            text="Compartilhe o IP e a senha acima com quem vai te acessar.",
+            text="Compartilhe a senha apenas com o responsável autorizado. Encerre o aplicativo após o suporte.",
             wraplength=360, justify="left", style="Subtitle.TLabel",
         ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
@@ -596,7 +615,7 @@ class App:
     def _build_client_section(self, parent) -> None:
         self.history = load_history()
 
-        frame = ttk.LabelFrame(parent, text="Acessar outro computador", padding=10)
+        frame = ttk.LabelFrame(parent, text="Solicitar conexão a outro computador", padding=10)
         frame.pack(fill="x", pady=(0, 10))
         frame.columnconfigure(1, weight=1)
 
@@ -609,7 +628,7 @@ class App:
 
         ttk.Label(frame, text="Senha:").grid(row=1, column=0, sticky="w", pady=(6, 0))
         self.remote_password_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=self.remote_password_var, width=20).grid(
+        ttk.Entry(frame, textvariable=self.remote_password_var, width=20, show="*").grid(
             row=1, column=1, columnspan=2, sticky="w", padx=(6, 0), pady=(6, 0)
         )
 
@@ -637,7 +656,7 @@ class App:
         host = self.remote_ip_var.get().strip()
         password = self.remote_password_var.get().strip()
         if not host or not password:
-            messagebox.showerror("Acesso Remoto", "Informe o IP e a senha do computador remoto.")
+            messagebox.showerror("DrogaLink Remote", "Informe o IP e a senha do computador remoto.")
             return
 
         viewer = ViewerWindow(self.root, host, password, DEFAULT_VIDEO_PORT, DEFAULT_CONTROL_PORT)
@@ -645,7 +664,7 @@ class App:
             viewer.connect()
         except (OSError, RuntimeError) as exc:
             viewer.destroy()
-            messagebox.showerror("Acesso Remoto", f"Nao foi possivel conectar: {exc}")
+            messagebox.showerror("DrogaLink Remote", f"Nao foi possivel conectar: {exc}")
             return
 
         self.remember_host(host)
