@@ -8,6 +8,7 @@ senha exibidos na tela dele.
 
 import io
 import json
+import logging
 import secrets
 import socket
 import ssl
@@ -129,6 +130,19 @@ def generate_password(length: int = 6) -> str:
 HISTORY_PATH = Path.home() / ".acesso_remoto_historico.json"
 MAX_HISTORY = 10
 
+# Local audit records only channel lifecycle events, never credentials or content.
+AUDIT_PATH = Path.home() / ".drogalink_remote_audit.log"
+AUDIT = logging.getLogger("drogalink.remote.audit")
+AUDIT.setLevel(logging.INFO)
+AUDIT.propagate = False
+try:
+    from logging.handlers import RotatingFileHandler
+    audit_handler = RotatingFileHandler(AUDIT_PATH, maxBytes=262144, backupCount=2, encoding="utf-8")
+    audit_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+    AUDIT.addHandler(audit_handler)
+except OSError:
+    AUDIT.addHandler(logging.NullHandler())
+
 
 def load_history() -> list:
     try:
@@ -156,6 +170,12 @@ class Host:
         self.fps = fps
         self.video_port = video_port
         self.control_port = control_port
+        self._active_lock = threading.Lock()
+        self._active_channels = set()
+
+    def active_channel_count(self):
+        with self._active_lock:
+            return len(self._active_channels)
 
     def start(self) -> None:
         video_sock = self._make_listener(self.video_port)
@@ -171,11 +191,20 @@ class Host:
         sock.listen(1)
         return sock
 
-    @staticmethod
-    def _serve_forever(sock, handler) -> None:
+    def _serve_forever(self, sock, handler) -> None:
         while True:
             conn, _addr = sock.accept()
-            threading.Thread(target=handler, args=(conn,), daemon=True).start()
+            threading.Thread(target=self._run_handler, args=(conn, handler), daemon=True).start()
+
+    def _run_handler(self, conn, handler) -> None:
+        try:
+            with conn:
+                handler(conn)
+        finally:
+            with self._active_lock:
+                if conn in self._active_channels:
+                    self._active_channels.discard(conn)
+                    AUDIT.info("authenticated channel closed")
 
     def _authenticate(self, conn) -> bool:
         try:
@@ -183,6 +212,10 @@ class Host:
         except OSError:
             return False
         ok = received == self.get_password_hash()
+        if ok:
+            with self._active_lock:
+                self._active_channels.add(conn)
+                AUDIT.info("authenticated channel opened")
         send_line(conn, "OK" if ok else "FAIL")
         return ok
 
@@ -537,6 +570,7 @@ class App:
         self._build_footer(container)
 
         self.host_server = Host(get_password_hash=lambda: hash_password(self.password))
+        self._refresh_access_indicator()
 
     def enable_local_support(self) -> None:
         if not messagebox.askyesno(
@@ -554,7 +588,17 @@ class App:
             self.support_status.set("Falha na ativação. Feche o aplicativo.")
             messagebox.showerror("DrogaLink Remote", "Falha ao ativar. Feche o aplicativo.")
             return
-        self.support_status.set("Recebimento habilitado. Feche o aplicativo para encerrar.")
+        self.support_status.set("Recebimento habilitado. Encerre o aplicativo após o suporte.")
+        AUDIT.info("local receiving enabled")
+
+    def _refresh_access_indicator(self) -> None:
+        count = self.host_server.active_channel_count()
+        self.access_indicator.set("ATENÇÃO: acesso remoto ativo" if count else "Nenhum canal autenticado ativo")
+        self.root.after(250, self._refresh_access_indicator)
+
+    def emergency_exit(self) -> None:
+        AUDIT.info("local emergency exit requested")
+        self.root.destroy()
 
     def _build_header(self, parent) -> None:
         header = ttk.Frame(parent)
@@ -575,7 +619,13 @@ class App:
         self.enable_support_button = ttk.Button(
             frame, text="Ativar recebimento", command=self.enable_local_support
         )
-        self.enable_support_button.grid(row=5, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.enable_support_button.grid(row=5, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ttk.Button(frame, text="Encerrar acesso e aplicativo", command=self.emergency_exit).grid(
+            row=5, column=2, sticky="e", pady=(6, 0)
+        )
+        self.access_indicator = tk.StringVar(value="Nenhum canal autenticado ativo")
+        ttk.Label(frame, textvariable=self.access_indicator, foreground="#B91C1C",
+                  wraplength=360).grid(row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
         ttk.Label(frame, text="Seu IP na rede local:").grid(row=0, column=0, sticky="w")
         ttk.Label(frame, text=local_ip(), style="Value.TLabel").grid(
