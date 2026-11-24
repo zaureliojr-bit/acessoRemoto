@@ -13,6 +13,14 @@ Por baixo dos panos, a comunicação usa duas conexões TCP simples: uma
 para o vídeo (frames JPEG da tela) e outra para os comandos de controle
 (mouse/teclado, em JSON). O acesso é protegido por senha.
 
+## Proteções locais experimentais
+
+- O recebimento começa desativado e exige ativação local.
+- O indicador alerta quando existe um canal autenticado ativo (não equivale à autorização individual de uma sessão).
+- O botão Encerrar acesso e aplicativo fecha o programa, interrompendo o recebimento. A confirmação de encerramento precisa ser validada no Windows.
+- O registro local `~/.drogalink_remote_audit.log` registra abertura e fechamento de canais e ações locais, sem senhas, imagens ou teclas. Não representa um histórico de autorizações individuais.
+- A autorização por sessão e a proteção criptográfica continuam pendentes. Não use em produção.
+
 ## Estado do projeto
 
 A identidade DrogaLink Remote é uma evolução experimental. A implantação em farmácias está condicionada a uma revisão de segurança, proteção do tráfego, autorização explícita de cada sessão e testes de estabilidade. Não exponha dados de clientes nem utilize esta versão para suporte em produção.
